@@ -87,7 +87,7 @@ class AdRemover:
         return False
 
 # ==========================================
-# 3. 核心处理逻辑
+# 3. 核心处理逻辑 (V8.0: 修复方法调用)
 # ==========================================
 class EbookPolisher:
     def __init__(self, input_path, output_path, config):
@@ -111,10 +111,9 @@ class EbookPolisher:
             self.language = 'zh' if lang.startswith('zh') else 'en'
         except: self.language = 'zh'
 
-    def get_decoration_html(self, title):
-        style = self.config.get('deco_style', 'Classic')
-        color = self.config.get('title_color', '#cc0000')
-        
+    # --- 静态方法：供预览和生成使用 (修复点：提取为静态方法) ---
+    @staticmethod
+    def generate_decoration_html(title, style, color):
         if style == 'Minimal':
             return f'<h1 style="text-align:center; font-weight:bold; margin:1.5em 0; color:{color};">{title}</h1>'
         elif style == 'Oriental':
@@ -138,13 +137,22 @@ class EbookPolisher:
             h1 = f'<h1 style="font-size: 1.8em; font-weight: bold; margin: 0; padding: 0; line-height: 1.4; color: {color};">{title}</h1>'
             return f'<div style="margin: 4em 1em 3em 1em; text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px;">{deco}{h1}</div>'
 
+    # --- 实例方法：内部调用 ---
+    def get_decoration_html(self, title):
+        style = self.config.get('deco_style', 'Classic')
+        color = self.config.get('title_color', '#cc0000')
+        # 修复点：调用静态方法
+        return EbookPolisher.generate_decoration_html(title, style, color)
+
     def reconstruct_chapter(self, content):
         try: soup = BeautifulSoup(content, 'lxml')
         except: soup = BeautifulSoup(content, 'html.parser')
+        
         raw_nodes = []
         original_title = ""
         h_tags = soup.find_all(['h1', 'h2', 'h3'])
         if h_tags: original_title = h_tags[0].get_text().strip()
+        
         for br in soup.find_all("br"): br.replace_with("\n")
         for elem in soup.body.descendants:
             if isinstance(elem, NavigableString):
@@ -154,12 +162,14 @@ class EbookPolisher:
                         if line.strip(): raw_nodes.append(('text', line.strip()))
             elif isinstance(elem, Tag) and elem.name == 'img':
                 if elem.has_attr('src'): raw_nodes.append(('img', elem['src']))
+
         final_title = original_title
         if not final_title and raw_nodes:
             first = raw_nodes[0]
             if first[0] == 'text':
                 txt = first[1]
                 if len(txt) < 30 and re.search(r'第.*?章', txt): final_title = txt
+
         check_range = 6 
         clean_title_chars = re.sub(r'\s+', '', final_title) if final_title else ""
         temp_nodes = raw_nodes[:]
@@ -173,16 +183,21 @@ class EbookPolisher:
             if len(node_text) < 30 and re.search(r'^第\s*[0-9零一二三四五六七八九十百千]+\s*[章节卷部]', node_text): is_duplicate = True
             if is_duplicate: temp_nodes.pop(0); check_range -= 1
             else: break
+        
         merged_nodes = self.normalizer.merge_broken_paragraphs(temp_nodes)
+
         new_soup = BeautifulSoup("<html><head></head><body></body></html>", 'html.parser')
         body = new_soup.body
+
         if final_title:
             html_str = self.get_decoration_html(final_title)
             title_tag = BeautifulSoup(html_str, 'html.parser')
             body.append(title_tag)
+
         indent = self.config.get('indent', '2em')
         line_height = self.config.get('line_height', '1.8')
         p_style = f"text-indent: {indent}; margin: 0 0 1em 0; line-height: {line_height}; text-align: justify; display: block;"
+        
         for type_, content in merged_nodes:
             if type_ == 'text':
                 if self.ad_remover.is_spam(content): continue
@@ -199,6 +214,7 @@ class EbookPolisher:
                 img['style'] = "max-width: 100%; height: auto;" 
                 p_img.append(img)
                 body.append(p_img)
+
         return new_soup.prettify()
 
     def process(self):
@@ -206,6 +222,7 @@ class EbookPolisher:
         css_text = "body { margin: 5px; background-color: #fff; font-family: 'Songti SC', serif; }" 
         nav_css = epub.EpubItem(uid="style_nav", file_name="style/base.css", media_type="text/css", content=css_text)
         self.book.add_item(nav_css)
+
         items = list(self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT))
         total = len(items); progress_bar = st.progress(0); status_text = st.empty()
         for i, item in enumerate(items):
@@ -217,7 +234,7 @@ class EbookPolisher:
         progress_bar.progress(100); status_text.text("处理完成！"); epub.write_epub(self.output_path, self.book)
 
 # ==========================================
-# 4. 邮件发送函数 (完整保留)
+# 4. 邮件发送函数
 # ==========================================
 def send_email_to_kindle(file_path, file_name, sender_email, sender_password, kindle_email):
     if "@gmail.com" in sender_email:
@@ -246,11 +263,10 @@ def send_email_to_kindle(file_path, file_name, sender_email, sender_password, ki
     except Exception as e: return False, str(e)
 
 # ==========================================
-# 5. Streamlit 界面 (V7.6 Final)
+# 5. Streamlit 界面 (V8.0 Final)
 # ==========================================
-st.set_page_config(page_title="电子书精排 V7.6", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="电子书精排 V8.0", page_icon="🎨", layout="centered")
 
-# --- 初始化 Session State 防止刷新丢失 ---
 if 'processed_path' not in st.session_state:
     st.session_state.processed_path = None
 
@@ -259,12 +275,16 @@ with st.sidebar:
     deco_options = ["Classic (经典菱形)", "Oriental (东方如意)", "Bamboo (水墨竹节)", "Vintage (西式复古)", "Flower (工笔繁花)", "Minimal (极简无图)"]
     deco_style = st.selectbox("章节标题风格", deco_options, index=0)
     deco_style_val = deco_style.split(" ")[0] 
+    
     title_color = st.color_picker("章节标题颜色", "#cc0000")
+    
     col_s1, col_s2 = st.columns(2)
     with col_s1: indent_opt = st.selectbox("首行缩进", ["2字符", "1字符", "无缩进"], index=0)
     with col_s2: lh_opt = st.selectbox("行间距", ["1.8倍 (默认)", "1.5倍", "1.0倍 (紧凑)", "2.0倍"], index=0)
+    
     indent_map = {"2字符": "2em", "1字符": "1em", "无缩进": "0"}
     lh_map = {"1.8倍 (默认)": "1.8", "1.5倍": "1.5", "1.0倍 (紧凑)": "1.0", "2.0倍": "2.0"}
+    
     st.divider()
     with st.expander("🛡️ 广告过滤关键词", expanded=False):
         st.caption("默认已内置最强广告词库。您可在此添加额外的关键词：")
@@ -283,8 +303,23 @@ with st.sidebar:
         st.session_state.processed_path = None
         st.rerun()
 
-st.title("🎨 电子书精排 V7.6")
-st.caption("新增：如意云纹/水墨竹节/复古纹样 | 修复文件丢失Bug | Kobo/Kindle 流程优化")
+st.title("🎨 电子书精排 V8.0")
+st.caption("新增实时预览功能 | 修复文件丢失Bug | Kobo/Kindle 流程优化")
+
+# === 实时预览区域 (V8.0 特性) ===
+st.markdown("### 👁️ 效果预览")
+with st.container(border=True):
+    # 调用静态方法生成预览 HTML
+    demo_title_html = EbookPolisher.generate_decoration_html("第一章 预览效果", deco_style_val, title_color)
+    demo_p_style = f"text-indent: {indent_map[indent_opt]}; margin: 0 0 1em 0; line-height: {lh_map[lh_opt]}; text-align: justify; display: block;"
+    
+    demo_content = f"""
+    {demo_title_html}
+    <p style="{demo_p_style}">这是一段排版预览文本。通过左侧边栏的选项，您可以实时查看到标题颜色、装饰风格、首行缩进以及行间距的变化效果。</p>
+    <p style="{demo_p_style}">工具会自动处理断行修复、标点规范化以及广告过滤。预览框内的文字样式将与您最终导出的电子书保持一致（字体取决于阅读器设置）。</p>
+    """
+    st.markdown(demo_content, unsafe_allow_html=True)
+# =================
 
 user_config = {
     'deco_style': deco_style_val,
@@ -297,7 +332,7 @@ user_config = {
 uploaded_file = st.file_uploader("请上传 EPUB 文件", type=["epub"])
 
 if uploaded_file is not None:
-    st.info(f"当前风格：{deco_style_val} | 颜色：{title_color}")
+    st.info(f"即将使用当前预览的配置处理文件...")
     
     if st.button("🚀 开始定制化处理", type="primary"):
         with st.spinner('正在根据您的设定重构书籍...'):
@@ -318,10 +353,9 @@ if uploaded_file is not None:
                 st.error(f"❌ 错误: {str(e)}")
             finally:
                 if os.path.exists(input_path): os.remove(input_path)
-                # 关键修复：这里绝不能删除 output_path，否则无法下载
+                # 修复点：不再删除 output_path，确保可下载
                 gc.collect()
 
-    # 结果显示区 (独立于按钮事件，防止刷新消失)
     if st.session_state.processed_path and os.path.exists(st.session_state.processed_path):
         with open(st.session_state.processed_path, "rb") as f:
             file_data = f.read()
