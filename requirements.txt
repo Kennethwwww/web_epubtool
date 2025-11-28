@@ -2,3 +2,4 @@ streamlit
 EbookLib
 beautifulsoup4
 langdetect
+lxml
