@@ -53,7 +53,7 @@ class TextNormalizer:
 # ==========================================
 class AdRemover:
     def __init__(self, custom_spam_list=None):
-        self.domain_keywords = [".com", ".cn", ".net", ".org", "www.", "http"]
+        self.domain_keywords = [".com", ".cn", ".net", ".org", "www.", "http", "https"]
         default_phrases = [
             "关注微信公众号", "微信搜索", "加群", "书友群", "官方群", "QQ群", "qq群",
             "求月票", "求推荐", "推荐票", "投推荐票", "月票", "打赏", "订阅", "求订阅", "鲜花", "评价票",
@@ -87,7 +87,7 @@ class AdRemover:
         return False
 
 # ==========================================
-# 3. 核心处理逻辑 (V15.1 修复版)
+# 3. 核心处理逻辑 (V15.2: Kobo兼容性增强)
 # ==========================================
 class EbookPolisher:
     def __init__(self, input_path, output_path, config):
@@ -204,7 +204,6 @@ class EbookPolisher:
         indent = self.config.get('indent', '2em')
         line_height = self.config.get('line_height', '1.8')
         
-        # V15.1 核心：强制首段无缩进
         dropcap_class = ""
         if self.config.get('enable_dropcaps', False):
             dropcap_class = " class='drop-cap'"
@@ -221,10 +220,8 @@ class EbookPolisher:
                 
                 p = new_soup.new_tag("p")
                 
-                # 物理首字下沉逻辑
                 if first_para and self.config.get('enable_dropcaps', False) and len(fixed) > 0:
-                    p['style'] = p_style_no_indent # 关键：首段强制无缩进
-                    
+                    p['style'] = p_style_no_indent
                     span = new_soup.new_tag("span", attrs={'class': 'drop-cap'})
                     span.string = fixed[0]
                     p.append(span)
@@ -248,7 +245,6 @@ class EbookPolisher:
     def process(self):
         self.detect_language()
         
-        # 物理首字下沉 CSS (修正版)
         dropcap_css = ""
         if self.config.get('enable_dropcaps', False):
             dropcap_css = """
@@ -260,7 +256,7 @@ class EbookPolisher:
                 margin-right: 6px;
                 margin-top: 4px;
                 color: inherit;
-                display: block; /* 增强兼容性 */
+                display: block;
             }
             """
             
@@ -283,15 +279,15 @@ class EbookPolisher:
         progress_bar.progress(100); status_text.text("处理完成！"); epub.write_epub(self.output_path, self.book)
 
 # ==========================================
-# 5. Streamlit 界面 (V15.1 Final)
+# 5. Streamlit 界面 (V15.2 Final)
 # ==========================================
-st.set_page_config(page_title="电子书精排 V15.1", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="电子书精排 V15.2", page_icon="🎨", layout="centered")
 
 if 'processed_path' not in st.session_state:
     st.session_state.processed_path = None
 
 # --- 上传区域 (Priority #1) ---
-st.title("📚 电子书精排工具 V15.1")
+st.title("📚 电子书精排工具 V15.2")
 st.markdown("**专为极致阅读体验打造**：一键去广告 · 智能断行修复 · 定制矢量纹样")
 
 with st.container(border=True):
@@ -340,7 +336,7 @@ st.write("")
 with st.expander("🎨 点击展开/折叠 排版效果预览", expanded=False):
     demo_title_html = EbookPolisher.generate_decoration_html("第一章 预览效果", deco_style_val, title_color)
     
-    # 预览 CSS 逻辑 (模拟物理效果)
+    # 预览 CSS 逻辑 (模拟物理 span)
     dropcap_css = ""
     first_para_class = ""
     # 预览中的第一段文本
@@ -409,7 +405,6 @@ if uploaded_file is not None:
                 st.error(f"❌ 错误: {str(e)}")
             finally:
                 if os.path.exists(input_path): os.remove(input_path)
-                # 修复点：确保文件不被删除，供下载使用
                 gc.collect()
 
     if st.session_state.processed_path and os.path.exists(st.session_state.processed_path):
