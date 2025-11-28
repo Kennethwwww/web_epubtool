@@ -13,7 +13,7 @@ import ebooklib
 from ebooklib import epub
 
 # ==========================================
-# 1. 文本修复专家
+# 1. 文本修复专家 (保持 V5 稳定性)
 # ==========================================
 class TextNormalizer:
     def __init__(self):
@@ -87,7 +87,7 @@ class AdRemover:
         return False
 
 # ==========================================
-# 3. 核心处理逻辑 (V14.1: 移除牡丹)
+# 3. 核心处理逻辑 (V14.2: 强制居中修复)
 # ==========================================
 class EbookPolisher:
     def __init__(self, input_path, output_path, config):
@@ -111,36 +111,40 @@ class EbookPolisher:
             self.language = 'zh' if lang.startswith('zh') else 'en'
         except: self.language = 'zh'
 
-    # --- 静态方法：SVG 纹样库 ---
+    # --- 静态方法：SVG 纹样库 (修复居中) ---
     @staticmethod
     def generate_decoration_html(title, style, color):
-        
+        # 共同的居中容器样式：宽度100%，左右自动边距，强制块级，文本居中
+        container_style = "margin: 4em auto 3em auto; text-align:center; width: 100%; display: block;"
+        svg_div_style = "margin: 0 auto 10px auto; text-align:center; display: block; width: 100%;"
+        h1_style = f"font-weight:bold; margin:0 auto; padding:0; font-family: 'Songti SC', serif; color:{color}; text-align: center;"
+
         if style == '祥云':
             svg_path = '<path d="M64.681 283.369c395.605 0 176.437 463.889 589.799 463.889h53.016c62.834 0 125.691-34.078 157.546-67.771 24.683-26.1 94.278-93.385 94.278-131.037v-33.134c0-59.061-50.783-119.289-112.657-119.289v-19.88c0-39.804-79.803-79.523-125.912-79.523h-59.644c-47.806 0-82.154 47.482-112.696 66.23-40.001 24.557-79.485 40.277-79.485 106.073v13.254c0 53.203 74.022 132.538 125.913 132.538h72.896c45.171 0 92.776-40.498 92.776-92.777v-13.253c0-37.206-43.813-72.896-79.523-72.896H654.48c-17.9 0-18.272 3.158-33.135 6.626 12.471-17.027 36.721-19.881 66.27-19.881h6.627c50.169 0 99.404 49.651 99.404 106.031v13.254c0 57.637-87.807 106.031-152.42 106.031h-19.881c-277.31 0-125.242-371.112-556.664-371.112v6.627z" fill="{color}"></path>'
-            svg = f'<svg viewBox="0 0 1024 1024" width="40" height="40" xmlns="http://www.w3.org/2000/svg">{svg_path.replace("{color}", color)}</svg>'
-            return f"""<div style="margin: 4em 0 3em 0; text-align:center;">
-                        <div style="margin-bottom:10px;">{svg}</div>
-                        <h1 style="font-weight:bold; margin:0; padding:0; font-family: 'Songti SC', serif; color:{color};">『 {title} 』</h1>
+            svg = f'<svg viewBox="0 0 1024 1024" width="40" height="40" xmlns="http://www.w3.org/2000/svg" style="margin: 0 auto; display: block;">{svg_path.replace("{color}", color)}</svg>'
+            return f"""<div style="{container_style}">
+                        <div style="{svg_div_style}">{svg}</div>
+                        <h1 style="{h1_style}">『 {title} 』</h1>
                        </div>"""
             
         elif style == '竹叶':
             svg_path = '<path d="M564.319256 244.640744c-199.846698 110.258605-244.61693 385.905116-244.61693 385.905116s137.811349 62.035349 382.452093-158.505674C946.795163 251.522977 981.253953 0 981.253953 0s-217.088 134.38214-416.934697 244.640744zM354.161116 761.474977c-113.711628-13.788279-279.099535 51.676279-279.099535 51.676279s-79.276651 51.676279 189.487628 151.623442c268.764279 99.923349 554.76986-41.364837 554.769861-41.364838-31.029581-13.788279-351.47014-148.122791-465.157954-161.934883zM37.149767 482.375442C47.485023 392.811163 140.502326 20.670512 140.502326 20.670512c34.482605 44.794047 106.829395 220.517209 127.499907 434.152186 20.670512 213.611163-117.164651 285.981767-117.164652 285.981767C102.63814 709.798698 26.814512 571.963535 37.149767 482.375442z" fill="{color}"></path>'
-            svg = f'<svg viewBox="0 0 1024 1024" width="50" height="50" xmlns="http://www.w3.org/2000/svg">{svg_path.replace("{color}", color)}</svg>'
-            return f"""<div style="margin: 3em 0 2em 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px 0; text-align:center;">
-                        <div style="margin-bottom:8px;">{svg}</div>
-                        <h1 style="font-weight:bold; font-family: Kaiti, serif; margin:0; letter-spacing: 2px; color:{color};">{title}</h1>
+            svg = f'<svg viewBox="0 0 1024 1024" width="50" height="50" xmlns="http://www.w3.org/2000/svg" style="margin: 0 auto; display: block;">{svg_path.replace("{color}", color)}</svg>'
+            return f"""<div style="margin: 3em auto 2em auto; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 20px 0; text-align:center; width: 100%; display: block;">
+                        <div style="{svg_div_style}">{svg}</div>
+                        <h1 style="font-weight:bold; font-family: Kaiti, serif; margin:0 auto; letter-spacing: 2px; color:{color}; text-align: center;">{title}</h1>
                        </div>"""
 
         elif style == '菱形':
             svg_path = '<path d="M484.352 607.459556a39.082667 39.082667 0 0 1 55.296 0l172.032 172.032a39.139556 39.139556 0 0 1 0 55.296L539.648 1006.933333a39.082667 39.082667 0 0 1-55.296 0L312.32 834.787556a39.082667 39.082667 0 0 1 0-55.296zM834.56 312.32l172.032 172.032a39.082667 39.082667 0 0 1 0 55.296L834.56 711.68a39.139556 39.139556 0 0 1-55.296 0l-172.032-172.032a39.082667 39.082667 0 0 1 0-55.296l172.032-172.032a39.082667 39.082667 0 0 1 55.296 0z m-589.824 0l172.032 172.032a39.082667 39.082667 0 0 1 0 55.296L244.736 711.68a39.139556 39.139556 0 0 1-55.296 0L17.408 539.648a39.082667 39.082667 0 0 1 0-55.296L189.44 312.32a39.082667 39.082667 0 0 1 55.296 0zM539.648 17.066667l172.032 172.088889a39.139556 39.139556 0 0 1 0 55.296L539.648 416.540444a39.082667 39.082667 0 0 1-55.296 0L312.32 244.508444a39.139556 39.139556 0 0 1 0-55.296L484.352 17.066667a39.082667 39.082667 0 0 1 55.296 0z" fill="{color}"></path>'
-            svg = f'<svg viewBox="0 0 1024 1024" width="50" height="50" xmlns="http://www.w3.org/2000/svg">{svg_path.replace("{color}", color)}</svg>'
-            return f"""<div style="margin: 4em 0 3em 0; text-align:center;">
-                        <div style="margin-bottom:10px;">{svg}</div>
-                        <h1 style="font-weight:bold; margin:0; padding:0; line-height:1.4; color:{color};">『 {title} 』</h1>
+            svg = f'<svg viewBox="0 0 1024 1024" width="50" height="50" xmlns="http://www.w3.org/2000/svg" style="margin: 0 auto; display: block;">{svg_path.replace("{color}", color)}</svg>'
+            return f"""<div style="{container_style}">
+                        <div style="{svg_div_style}">{svg}</div>
+                        <h1 style="{h1_style}">『 {title} 』</h1>
                        </div>"""
 
         else: # Minimal
-            return f'<h1 style="text-align:center; font-weight:bold; margin:1.5em 0; color:{color};">{title}</h1>'
+            return f'<h1 style="text-align:center; font-weight:bold; margin:1.5em auto; color:{color}; width:100%; display:block;">{title}</h1>'
 
     # --- 实例方法 ---
     def get_decoration_html(self, title):
@@ -201,7 +205,6 @@ class EbookPolisher:
         indent = self.config.get('indent', '2em')
         line_height = self.config.get('line_height', '1.8')
         
-        # CSS 类支持
         dropcap_class = ""
         if self.config.get('enable_dropcaps', False):
             dropcap_class = " class='drop-cap'"
@@ -214,15 +217,12 @@ class EbookPolisher:
                 if self.ad_remover.is_spam(content): continue
                 fixed = self.normalizer.fix_punctuation(content)
                 if not fixed: continue
-                
                 p = new_soup.new_tag("p")
                 p.string = fixed
                 p['style'] = p_style
-                
                 if first_para and self.config.get('enable_dropcaps', False):
                      p['class'] = 'drop-cap'
                      first_para = False
-                     
                 body.append(p)
             elif type_ == 'img':
                 p_img = new_soup.new_tag("p")
@@ -237,24 +237,21 @@ class EbookPolisher:
     def process(self):
         self.detect_language()
         
-        # 注入 CSS
-        title_color = self.config.get('title_color', '#cc0000')
-        
+        # V14.2 修复：在全局 CSS 中显式加入 h1 居中
         dropcap_css = ""
         if self.config.get('enable_dropcaps', False):
-            dropcap_css = f"""
-            p.drop-cap::first-letter {{
-                font-size: 3em;
-                font-weight: bold;
-                float: left;
-                line-height: 0.8;
-                margin-right: 0.1em;
-                margin-top: 0.1em;
-                color: inherit;
-            }}
+            dropcap_css = """
+            p.drop-cap::first-letter {
+                font-size: 3em; font-weight: bold; float: left;
+                line-height: 0.8; margin-right: 0.1em; margin-top: 0.1em; color: inherit;
+            }
             """
             
-        css_text = f"body {{ margin: 5px; background-color: #fff; font-family: 'Songti SC', serif; }} {dropcap_css}"
+        css_text = f"""
+        body {{ margin: 5px; background-color: #fff; font-family: 'Songti SC', serif; }}
+        h1 {{ text-align: center; margin: 0 auto; display: block; }}
+        {dropcap_css}
+        """
         nav_css = epub.EpubItem(uid="style_nav", file_name="style/base.css", media_type="text/css", content=css_text)
         self.book.add_item(nav_css)
 
@@ -269,15 +266,15 @@ class EbookPolisher:
         progress_bar.progress(100); status_text.text("处理完成！"); epub.write_epub(self.output_path, self.book)
 
 # ==========================================
-# 5. Streamlit 界面 (V14.1 Final)
+# 5. Streamlit 界面 (V14.2 Final)
 # ==========================================
-st.set_page_config(page_title="电子书精排 V14.1", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="电子书精排 V14.2", page_icon="🎨", layout="centered")
 
 if 'processed_path' not in st.session_state:
     st.session_state.processed_path = None
 
 # --- 上传区域 ---
-st.title("📚 电子书精排工具 V14.1")
+st.title("📚 电子书精排工具 V14.2")
 st.markdown("**专为极致阅读体验打造**：一键去广告 · 智能断行修复 · 定制矢量纹样")
 
 with st.container(border=True):
@@ -290,7 +287,6 @@ with st.sidebar:
     
     enable_dropcaps = st.checkbox("首字下沉 (Drop Caps)", value=False)
     
-    # 移除了"牡丹"
     deco_options = ["祥云", "竹叶", "菱形", "Minimal (极简无图)"]
     deco_style = st.selectbox("章节标题风格", deco_options, index=0)
     deco_style_val = deco_style.split(" ")[0] 
