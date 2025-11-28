@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import tempfile
 import shutil
+import gc
 import re
 from bs4 import BeautifulSoup, NavigableString, Tag
 from langdetect import detect
@@ -9,9 +10,8 @@ import ebooklib
 from ebooklib import epub
 
 # ==========================================
-# 核心逻辑区 (完全沿用 V5.1 红色标题版)
+# 核心逻辑区 (V5.1 红色标题版逻辑 - 保持不变)
 # ==========================================
-
 class TextNormalizer:
     def __init__(self):
         self.sentence_endings = re.compile(r'[。！？…！””’\?\.!]$')
@@ -49,10 +49,8 @@ class TextNormalizer:
                 continue
             text = content.strip()
             if not text: continue
-            
             if buffer_text: buffer_text += text
             else: buffer_text = text
-            
             if self.sentence_endings.search(buffer_text):
                 merged_nodes.append(('text', buffer_text))
                 buffer_text = ""
@@ -149,7 +147,6 @@ class EbookPolisher:
 
         merged_nodes = self.normalizer.merge_broken_paragraphs(temp_nodes)
 
-        # 构建页面 (V5.1 红色标题样式)
         if final_title:
             header_div = new_soup.new_tag("div")
             header_div['style'] = "margin: 4em 1em 3em 1em; text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px;"
@@ -158,7 +155,6 @@ class EbookPolisher:
             deco['style'] = "font-size: 2em; color: #555; margin-bottom: 15px;"
             h1 = new_soup.new_tag("h1")
             h1.string = final_title
-            # 🔴 关键：红色标题样式
             h1['style'] = "font-size: 1.8em; font-weight: bold; margin: 0; padding: 0; line-height: 1.4; color: #cc0000;"
             header_div.append(deco)
             header_div.append(h1)
@@ -192,84 +188,100 @@ class EbookPolisher:
         self.book.add_item(nav_css)
 
         items = list(self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT))
-        # 增加进度条回调
         total = len(items)
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         for i, item in enumerate(items):
             try:
-                # 更新网页进度条
                 progress = int((i / total) * 100)
                 progress_bar.progress(progress)
                 status_text.text(f"正在处理: {item.file_name} ...")
-                
                 raw = item.get_content()
                 new_c = self.reconstruct_chapter(raw)
                 item.set_content(str(new_c).encode('utf-8'))
             except Exception as e: pass
+            
+            if i % 50 == 0: gc.collect()
         
         progress_bar.progress(100)
-        status_text.text("处理完成！正在打包...")
+        status_text.text("处理完成！正在准备下载...")
         epub.write_epub(self.output_path, self.book, {})
 
 # ==========================================
-# 4. Streamlit 网页界面设计
+# 4. Streamlit 网页界面 (新增传输按钮)
 # ==========================================
 
-# 设置页面配置
-st.set_page_config(page_title="电子书精排工具", page_icon="📚", layout="centered")
+st.set_page_config(page_title="电子书精排 V5.2", page_icon="📚", layout="centered")
 
-# 标题区
-st.title("📚 电子书精排 V5.1 (红色标题版)")
-st.markdown("""
-<style>
-    .big-font { font-size:18px !important; color: #555; }
-</style>
-<p class="big-font">专为手机阅读优化：智能断行修复 | 标点规范 | 去除广告 | 红色章节标题</p>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.header("⚙️ 操作菜单")
+    if st.button("🔄 重置/处理下一本", type="primary"):
+        st.cache_data.clear()
+        st.rerun()
+    st.info("如果遇到错误，请点击上方重置按钮。")
+    st.divider()
+    st.markdown("🔗 **常用链接**")
+    st.link_button("📤 打开 Kobo/Kindle 无线传输", "https://send.djazz.se")
 
-st.write("---")
+st.title("📚 电子书精排 V5.2 (传送版)")
+st.markdown("专为手机阅读优化：智能断行修复 | 标点规范 | 去除广告 | 红色章节标题")
+st.divider()
 
-# 文件上传区
-uploaded_file = st.file_uploader("请上传 EPUB 文件 (支持手机和电脑)", type=["epub"])
+uploaded_file = st.file_uploader("请上传 EPUB 文件", type=["epub"])
 
 if uploaded_file is not None:
-    st.info(f"📄 已加载文件: {uploaded_file.name}")
+    st.success(f"📄 已加载: {uploaded_file.name}")
     
-    # 核心按钮
-    if st.button("🚀 开始精排处理", type="primary"):
-        # 1. 创建临时文件处理 (Streamlit 无法直接读内存文件路径)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as tmp_in:
-            tmp_in.write(uploaded_file.getvalue())
-            input_path = tmp_in.name
-        
-        output_path = input_path.replace(".epub", "_精排版.epub")
-        
-        try:
-            # 2. 调用核心逻辑
-            polisher = EbookPolisher(input_path, output_path)
-            polisher.process()
-            
-            # 3. 读取结果并提供下载
-            with open(output_path, "rb") as f:
-                result_data = f.read()
+    start_btn = st.button("🚀 开始精排处理", type="primary")
+    
+    if start_btn:
+        with st.spinner('正在进行智能重构，请耐心等待...'):
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as tmp_in:
+                    tmp_in.write(uploaded_file.getvalue())
+                    input_path = tmp_in.name
                 
-            st.success("✅ 精排完成！")
-            
-            st.download_button(
-                label="📥 点击下载精排版 EPUB",
-                data=result_data,
-                file_name=f"精排_{uploaded_file.name}",
-                mime="application/epub+zip",
-            )
-            
-        except Exception as e:
-            st.error(f"处理过程中发生错误: {str(e)}")
-        finally:
-            # 清理垃圾文件
-            if os.path.exists(input_path): os.remove(input_path)
-            if os.path.exists(output_path): os.remove(output_path)
-
-st.write("---")
-st.caption("Powered by Python & Streamlit | 本地运行，数据安全")
+                output_path = input_path.replace(".epub", "_精排版.epub")
+                
+                polisher = EbookPolisher(input_path, output_path)
+                polisher.process()
+                
+                with open(output_path, "rb") as f:
+                    result_data = f.read()
+                
+                st.balloons()
+                st.success("✅ 精排完成！")
+                st.markdown("---")
+                
+                # ==== 核心修改区：下载与传输按钮并排显示 ====
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # 1. 下载按钮
+                    st.download_button(
+                        label="📥 1. 下载文件到本地",
+                        data=result_data,
+                        file_name=f"精排_{uploaded_file.name}",
+                        mime="application/epub+zip",
+                        use_container_width=True,
+                        type="primary"
+                    )
+                
+                with col2:
+                    # 2. 传输跳转按钮
+                    st.link_button(
+                        label="📤 2. 去 Kobo/Kindle 传输",
+                        url="https://send.djazz.se",
+                        use_container_width=True
+                    )
+                
+                st.caption("ℹ️ 操作提示：请先点击左侧按钮【下载文件】，然后点击右侧按钮跳转网页，将下载好的文件上传即可。")
+                # ========================================
+                
+            except Exception as e:
+                st.error(f"❌ 发生错误: {str(e)}")
+            finally:
+                if 'input_path' in locals() and os.path.exists(input_path): os.remove(input_path)
+                if 'output_path' in locals() and os.path.exists(output_path): os.remove(output_path)
+                gc.collect()
