@@ -49,34 +49,60 @@ class TextNormalizer:
         return merged_nodes
 
 # ==========================================
-# 2. 广告清洗模块
+# 2. 广告清洗模块 (V7 大幅增强)
 # ==========================================
 class AdRemover:
     def __init__(self, custom_spam_list=None):
-        self.domain_keywords = [".com", ".cn", ".net", ".org", "www.", "http"]
-        default_phrases = ["关注微信公众号", "微信搜索", "求月票", "推荐票", "一秒记住", "下载APP", "点击下一页", "点击继续阅读", "章末", "精彩内容", "m.", "M."]
+        self.domain_keywords = [".com", ".cn", ".net", ".org", "www.", "http", "https"]
+        
+        # V7: 大幅扩充默认广告词库
+        default_phrases = [
+            # 社交/引流
+            "关注微信公众号", "微信搜索", "加群", "书友群", "官方群", "QQ群", "qq群",
+            # 投票/打赏
+            "求月票", "求推荐", "推荐票", "投推荐票", "月票", "打赏", "订阅", "求订阅", "鲜花", "评价票",
+            # 平台/App
+            "一秒记住", "下载APP", "下载客户端", "点击下一页", "点击继续阅读", "点击全文阅读", 
+            "阅读模式", "浏览模式", "手机用户", "请访问", "浏览器", "搜小说", "看书网",
+            # 状态/防盗
+            "本章完", "未完待续", "防盗版", "盗版", "正版", "最新章节", "无弹窗", 
+            "加入书架", "更新", "发布", "整理", "校对", "翻页", "章末", "精彩内容",
+            "作者有话说", "PS：", "ps:", "（本章未完", "m.", "M."
+        ]
         
         if custom_spam_list and len(custom_spam_list) > 0:
             self.spam_phrases = custom_spam_list
         else:
             self.spam_phrases = default_phrases
             
-        self.regex_patterns = [re.compile(r'第.*?页', re.IGNORECASE), re.compile(r'^\s*PS[：:].*?$', re.IGNORECASE)]
+        self.regex_patterns = [
+            re.compile(r'第.*?页', re.IGNORECASE),
+            re.compile(r'^\s*PS[：:].*?$', re.IGNORECASE),
+            re.compile(r'（.*?字）', re.IGNORECASE), # 去除 (3000字) 这种统计
+            re.compile(r'^\s*【.*?】\s*$', re.IGNORECASE) # 去除整行的 【求票】
+        ]
 
     def is_spam(self, text):
         if not text: return True
         text = text.strip()
         if len(text) < 2 and not text.isdigit(): return True 
+        
+        # 网址检测
         for d in self.domain_keywords:
             if d in text.lower(): return True
+            
+        # 关键词检测
         for p in self.spam_phrases:
             if p in text: return True
+            
+        # 正则检测
         for r in self.regex_patterns:
             if r.search(text): return True
+            
         return False
 
 # ==========================================
-# 3. 核心处理逻辑 (Config支持)
+# 3. 核心处理逻辑 (V7 新增样式库)
 # ==========================================
 class EbookPolisher:
     def __init__(self, input_path, output_path, config):
@@ -101,16 +127,42 @@ class EbookPolisher:
         except: self.language = 'zh'
 
     def get_decoration_html(self, title):
+        """V7: 丰富的样式库"""
         style = self.config.get('deco_style', 'Classic')
         color = self.config.get('title_color', '#cc0000')
         
+        # 1. 极简风格
         if style == 'Minimal':
             return f'<h1 style="text-align:center; font-weight:bold; margin:1.5em 0; color:{color};">{title}</h1>'
-        elif style == 'Cloud':
+        
+        # 2. 祥云风格 (Oriental) - 动态颜色
+        elif style == 'Oriental':
             svg = f"""<div style="text-align:center; margin-bottom:10px;"><svg viewBox="0 0 1024 1024" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><path d="M866.9 166.9c-16.6-11.6-38.6-8.2-50.8 7.3-26.6 34.2-56.6 57.6-89.6 70.1-9.9-46-34.4-86.8-69.4-116.6-43.8-37.2-100-57.8-158.2-57.8-57.6 0-113.2 20-156.6 56.4-36.2 30.2-61.2 71.8-70.6 118.2-34.6-13.8-66-39.6-92.4-76.4-11.4-15.8-33.6-19.8-50.2-9-17.2 11.2-21.8 33.8-10.4 50.2 41.8 59.8 96.6 97.4 158 109.8 11.8 62 67.2 108.2 133.4 108.2 30.6 0 59.4-10 82.6-27 23.2 16.6 51.6 26.6 82.2 26.6 66.8 0 122.6-47.2 133.8-110.2 59.6-14.2 112.4-52 150.8-109.4 11.2-16.6 6.8-39.2-10.6-50.4z" fill="{color}"/></svg></div>"""
             h1 = f'<h1 style="text-align:center; font-weight:bold; margin:0; padding:0; color:{color};">『 {title} 』</h1>'
             return f'<div style="margin: 3em 0 2em 0; border-bottom: 1px solid #eee; padding-bottom: 20px;">{svg}{h1}</div>'
-        else: # Classic
+            
+        # 3. 竹节风格 (Bamboo)
+        elif style == 'Bamboo':
+            svg = f"""<div style="text-align:center; margin-bottom:5px;"><svg viewBox="0 0 1024 1024" width="40" height="20" xmlns="http://www.w3.org/2000/svg"><path d="M128 384h768v256H128z" fill="none" stroke="{color}" stroke-width="40" stroke-linecap="round"/><path d="M128 512h768" stroke="white" stroke-width="10"/></svg></div>"""
+            h1 = f'<h1 style="text-align:center; font-weight:bold; font-family: Kaiti, serif; margin:0; color:{color};">{title}</h1>'
+            return f'<div style="margin: 3em 0 2em 0; padding-bottom: 10px;">{svg}{h1}</div>'
+
+        # 4. 复古框风格 (Vintage)
+        elif style == 'Vintage':
+            return f"""
+            <div style="margin: 4em 1em; padding: 20px; border: 3px double {color}; text-align: center;">
+                <h1 style="font-weight: bold; margin: 0; color: {color}; font-size: 1.6em;">{title}</h1>
+            </div>
+            """
+            
+        # 5. 繁花风格 (Flower)
+        elif style == 'Flower':
+            svg = f"""<div style="text-align:center; margin-bottom:10px;"><svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg" fill="{color}"><path d="M12 2L14 10H22L16 15L18 22L12 18L6 22L8 15L2 10H10L12 2Z"/></svg></div>"""
+            h1 = f'<h1 style="text-align:center; font-weight:bold; margin:0; color:{color};">~ {title} ~</h1>'
+            return f'<div style="margin: 3em 0; text-align: center;">{svg}{h1}</div>'
+
+        # 6. 经典菱形 (Classic)
+        else:
             deco = f'<div style="font-size: 2em; color: #555; margin-bottom: 15px;">❖</div>'
             h1 = f'<h1 style="font-size: 1.8em; font-weight: bold; margin: 0; padding: 0; line-height: 1.4; color: {color};">{title}</h1>'
             return f'<div style="margin: 4em 1em 3em 1em; text-align: center; border-bottom: 2px solid #333; padding-bottom: 15px;">{deco}{h1}</div>'
@@ -205,23 +257,17 @@ class EbookPolisher:
         progress_bar.progress(100); status_text.text("处理完成！"); epub.write_epub(self.output_path, self.book, {})
 
 # ==========================================
-# 4. 邮件发送函数 (修复：补全缺失的函数)
+# 4. 邮件发送函数
 # ==========================================
 def send_email_to_kindle(file_path, file_name, sender_email, sender_password, kindle_email):
-    # 自动推断 SMTP 服务器
     if "@gmail.com" in sender_email:
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 587
+        smtp_server = "smtp.gmail.com"; smtp_port = 587
     elif "@qq.com" in sender_email:
-        smtp_server = "smtp.qq.com"
-        smtp_port = 465
+        smtp_server = "smtp.qq.com"; smtp_port = 465
     elif "@163.com" in sender_email:
-        smtp_server = "smtp.163.com"
-        smtp_port = 465
+        smtp_server = "smtp.163.com"; smtp_port = 465
     else:
-        # 默认尝试 465 端口
-        smtp_server = "smtp." + sender_email.split("@")[1]
-        smtp_port = 465
+        smtp_server = "smtp." + sender_email.split("@")[1]; smtp_port = 465
 
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -248,30 +294,46 @@ def send_email_to_kindle(file_path, file_name, sender_email, sender_password, ki
         return False, str(e)
 
 # ==========================================
-# 5. Streamlit 界面
+# 5. Streamlit 界面 (V7 定制版)
 # ==========================================
 
-st.set_page_config(page_title="电子书精排 V6.0", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="电子书精排 V7.0", page_icon="🎨", layout="centered")
 
 with st.sidebar:
     st.header("🎨 排版定制")
-    deco_style = st.selectbox("章节标题风格", ["Classic (经典菱形)", "Cloud (红色祥云)", "Minimal (极简无图)"], index=0)
+    
+    # 样式选择 (V7 新增多种样式)
+    deco_options = [
+        "Classic (经典菱形)", 
+        "Oriental (东方祥云)", 
+        "Bamboo (清雅竹节)", 
+        "Vintage (西式复古)", 
+        "Flower (繁花)",
+        "Minimal (极简无图)"
+    ]
+    deco_style = st.selectbox("章节标题风格", deco_options, index=0)
     deco_style_val = deco_style.split(" ")[0] 
+    
     title_color = st.color_picker("章节标题颜色", "#cc0000")
     
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         indent_opt = st.selectbox("首行缩进", ["2字符", "1字符", "无缩进"], index=0)
     with col_s2:
-        lh_opt = st.selectbox("行间距", ["1.8倍", "1.5倍", "2.0倍"], index=0)
+        # V7 新增 1.0倍 行距
+        lh_opt = st.selectbox("行间距", ["1.8倍 (默认)", "1.5倍", "1.0倍 (紧凑)", "2.0倍"], index=0)
+        
     indent_map = {"2字符": "2em", "1字符": "1em", "无缩进": "0"}
-    lh_map = {"1.8倍": "1.8", "1.5倍": "1.5", "2.0倍": "2.0"}
+    lh_map = {"1.8倍 (默认)": "1.8", "1.5倍": "1.5", "1.0倍 (紧凑)": "1.0", "2.0倍": "2.0"}
     
     st.divider()
-    with st.expander("🛡️ 广告过滤关键词 (可编辑)", expanded=False):
-        default_spam = "关注微信公众号\n微信搜索\n求月票\n推荐票\n一秒记住\n下载APP\n点击下一页\n点击继续阅读\n章末\n精彩内容\nm.\nM."
-        spam_text = st.text_area("每行一个关键词", value=default_spam, height=150)
-        spam_list = [line.strip() for line in spam_text.split('\n') if line.strip()]
+    
+    # 广告过滤配置 (V7 默认词库已大幅更新)
+    with st.expander("🛡️ 广告过滤关键词 (已更新)", expanded=False):
+        # 这里仅展示默认值供参考，实际逻辑在 AdRemover 类中
+        st.caption("默认已内置最强广告词库。您可在此添加额外的关键词：")
+        user_spam_text = st.text_area("额外关键词 (每行一个)", height=100)
+        user_spam_list = [line.strip() for line in user_spam_text.split('\n') if line.strip()]
 
     st.divider()
     with st.expander("📧 Kindle 推送配置"):
@@ -283,21 +345,21 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
-st.title("🎨 电子书精排 V6.0 (定制版)")
-st.caption("现在，您可以完全掌控书籍的排版风格了。")
+st.title("🎨 电子书精排 V7.0 (深度定制版)")
+st.caption("新增竹节、复古等样式 | 1.0倍行距 | 3倍广告拦截库")
 
 user_config = {
     'deco_style': deco_style_val,
     'title_color': title_color,
     'indent': indent_map[indent_opt],
     'line_height': lh_map[lh_opt],
-    'spam_keywords': spam_list
+    'spam_keywords': user_spam_list # 传入用户自定义的
 }
 
 uploaded_file = st.file_uploader("请上传 EPUB 文件", type=["epub"])
 
 if uploaded_file is not None:
-    st.info(f"当前配置：{deco_style_val} | 颜色 {title_color} | 缩进 {indent_opt}")
+    st.info(f"当前风格：{deco_style_val} | 颜色：{title_color}")
     
     if st.button("🚀 开始定制化处理", type="primary"):
         with st.spinner('正在根据您的设定重构书籍...'):
@@ -309,9 +371,11 @@ if uploaded_file is not None:
                 output_path = input_path.replace(".epub", "_定制版.epub")
                 polisher = EbookPolisher(input_path, output_path, user_config)
                 polisher.process()
+                
                 st.session_state.processed_path = output_path
                 st.balloons()
                 st.success("✅ 处理完成！")
+                
             except Exception as e:
                 st.error(f"❌ 错误: {str(e)}")
             finally:
